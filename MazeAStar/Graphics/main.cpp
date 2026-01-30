@@ -2,17 +2,18 @@
 #include <time.h>
 #include <math.h>
 #include "glut.h"
-#include "Node.h"
-#include "CompareNodes.h"
 
 #include <vector>
+#include <list>
 #include <queue>
+#include <utility>
 #include <iostream>
 #include <algorithm>
+#include <functional>
 
 using namespace std;
 
-const int MSZ = 100;
+const int MSZ = 50;
 const int SPACE = 0;
 const int WALL = 1;
 const int COIN = 2;
@@ -20,9 +21,13 @@ const int PACMAN = 3;
 const int GHOST = 4;
 
 const int MAX_BFS_DEPTH = 5; // Limited depth for BFS
+const int MOVE_INTERVAL_MS = 250; // milliseconds between moves (slower = higher value)
+const int MIN_GHOST_DISTANCE = 6; // ghosts spawn at least this many steps from Pacman
 
 int maze[MSZ][MSZ] = { 0 };
+int lastMoveTime = 0; // for throttling movement
 int pacmanRow, pacmanCol;
+int prevPacmanRow = -1, prevPacmanCol = -1; // avoid fleeing back and forth
 int ghostRows[3], ghostCols[3];
 int coinsCollected = 0;
 int totalCoins = 0;
@@ -35,12 +40,11 @@ const int LEFT = 3;
 const int RIGHT = 4;
 
 void initMaze();
-void CheckNeighbor(Node* pNeighbor, vector<Node> &grays, 
-	vector<Node> &blacks, priority_queue<Node*, vector<Node*>, CompareNodes> &pq, int targetRow, int targetCol);
-vector<Node*> AStar(int startRow, int startCol, int targetRow, int targetCol);
+vector<pair<int, int>> GetReachableSpaceCells(int fromRow, int fromCol);
+vector<pair<int, int>> AStar(int startRow, int startCol, int targetRow, int targetCol);
 int LimitedBFS(int startRow, int startCol, int maxDepth);
 int FindNearestCoin(int row, int col);
-int GetDirectionAwayFromGhost(int pacmanRow, int pacmanCol, int ghostRow, int ghostCol);
+int GetDirectionAwayFromGhost(int pacmanRow, int pacmanCol, int ghostRow, int ghostCol, int prevRow = -1, int prevCol = -1);
 int GetDirectionTowardCoin(int pacmanRow, int pacmanCol, int coinRow, int coinCol);
 void MovePacman();
 void MoveGhosts();
@@ -95,15 +99,27 @@ void initMaze()
 	pacmanCol = MSZ / 2;
 	maze[pacmanRow][pacmanCol] = PACMAN;
 
-	// Place 3 ghosts
+	// Place 3 ghosts: reachable from Pacman and at least MIN_GHOST_DISTANCE steps away
+	vector<pair<int, int>> reachable = GetReachableSpaceCells(pacmanRow, pacmanCol);
+	vector<pair<int, int>> farEnough;
+	for (size_t i = 0; i < reachable.size(); i++)
+	{
+		int r = reachable[i].first, c = reachable[i].second;
+		int dist = abs(r - pacmanRow) + abs(c - pacmanCol);
+		if (dist >= MIN_GHOST_DISTANCE)
+			farEnough.push_back(reachable[i]);
+	}
+	if (farEnough.empty())
+		farEnough = reachable; // fallback if maze is small
 	for (int g = 0; g < 3; g++)
 	{
-		do {
-			ghostRows[g] = rand() % MSZ;
-			ghostCols[g] = rand() % MSZ;
-		} while (maze[ghostRows[g]][ghostCols[g]] != SPACE || 
-			(ghostRows[g] == pacmanRow && ghostCols[g] == pacmanCol));
+		if (farEnough.empty())
+			break;
+		int idx = rand() % (int)farEnough.size();
+		ghostRows[g] = farEnough[idx].first;
+		ghostCols[g] = farEnough[idx].second;
 		maze[ghostRows[g]][ghostCols[g]] = GHOST;
+		farEnough.erase(farEnough.begin() + idx);
 	}
 
 	// Place coins
@@ -121,153 +137,109 @@ void initMaze()
 	}
 }
 
-void CheckNeighbor(Node* pNeighbor, vector<Node> &grays, 
-	vector<Node> &blacks, priority_queue<Node*, vector<Node*>, CompareNodes> &pq, int targetRow, int targetCol)
+// BFS from (fromRow, fromCol); returns all SPACE cells reachable without crossing walls.
+vector<pair<int, int>> GetReachableSpaceCells(int fromRow, int fromCol)
 {
-	// pNeighbor can be:
-	// black - do nothing
-	// white - paint it gray and add it to pq
-	// gray - update if better path found
+	vector<pair<int, int>> result;
+	queue<pair<int, int>> q;
+	vector<vector<bool>> visited(MSZ, vector<bool>(MSZ, false));
 
-	int row = pNeighbor->getRow();
-	int col = pNeighbor->getCol();
+	q.push({ fromRow, fromCol });
+	visited[fromRow][fromCol] = true;
 
-	// Check if it's a wall or out of bounds
-	if (row < 0 || row >= MSZ || col < 0 || col >= MSZ || maze[row][col] == WALL)
+	int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
+
+	while (!q.empty())
 	{
-		delete pNeighbor;
-		return;
-	}
+		int r = q.front().first;
+		int c = q.front().second;
+		q.pop();
 
-	// Check if it's black (already processed)
-	vector<Node>::iterator itBlack = find(blacks.begin(), blacks.end(), *pNeighbor);
-	if (itBlack != blacks.end())
-	{
-		delete pNeighbor;
-		return;
-	}
+		if (maze[r][c] == SPACE)
+			result.push_back({ r, c });
 
-	// Check if it's gray (already in queue)
-	vector<Node>::iterator itGray = find(grays.begin(), grays.end(), *pNeighbor);
-	if (itGray != grays.end())
-	{
-		// If we found a better path, update it
-		if (pNeighbor->getF() < itGray->getF())
+		for (int d = 0; d < 4; d++)
 		{
-			itGray->setParent(pNeighbor->getParent());
-			itGray->setG(pNeighbor->getG());
-			itGray->ComputeH(targetRow, targetCol);
-			itGray->ComputeF();
-			pq.push(&(*itGray));
+			int nr = r + directions[d][0];
+			int nc = c + directions[d][1];
+			if (nr >= 0 && nr < MSZ && nc >= 0 && nc < MSZ &&
+				!visited[nr][nc] && maze[nr][nc] != WALL)
+			{
+				visited[nr][nc] = true;
+				q.push({ nr, nc });
+			}
 		}
-		delete pNeighbor;
-		return;
 	}
-
-	// It's white - add it to grays and pq
-	pNeighbor->ComputeH(targetRow, targetCol);
-	pNeighbor->ComputeF();
-	grays.push_back(*pNeighbor);
-	pq.push(&grays.back());
+	return result;
 }
 
-// A* algorithm to find path from start to target
-vector<Node*> AStar(int startRow, int startCol, int targetRow, int targetCol)
+// A* using (f, row, col) in pq - no pointers, so no dangling refs or duplicate-pop bugs
+vector<pair<int, int>> AStar(int startRow, int startCol, int targetRow, int targetCol)
 {
-	vector<Node> grays;
-	vector<Node> blacks;
-	priority_queue<Node*, vector<Node*>, CompareNodes> pq;
-	Node* pCurrent;
-	Node* pNeighbor;
-	vector<Node*> path;
+	// min-heap by f: (f, (row, col))
+	typedef pair<double, pair<int, int>> PQEntry;
+	priority_queue<PQEntry, vector<PQEntry>, greater<PQEntry>> pq;
 
-	// Setup first Node
-	Node startNode(startRow, startCol, nullptr, 0);
-	startNode.ComputeH(targetRow, targetCol);
-	startNode.ComputeF();
-	grays.push_back(startNode);
-	pq.push(&grays.back());
+	vector<vector<double>> g(MSZ, vector<double>(MSZ, 1e9));
+	vector<vector<pair<int, int>>> parent(MSZ, vector<pair<int, int>>(MSZ, { -1, -1 }));
+	vector<vector<bool>> closed(MSZ, vector<bool>(MSZ, false));
+
+	auto h = [targetRow, targetCol](int r, int c) {
+		return (double)(abs(r - targetRow) + abs(c - targetCol));
+	};
+
+	g[startRow][startCol] = 0;
+	double f0 = 0 + h(startRow, startCol);
+	pq.push({ f0, { startRow, startCol } });
+
+	int dr[4] = { -1, 1, 0, 0 };
+	int dc[4] = { 0, 0, -1, 1 };
 
 	while (!pq.empty())
 	{
-		// pick the BEST node from pq
-		pCurrent = pq.top();
+		double f = pq.top().first;
+		int row = pq.top().second.first;
+		int col = pq.top().second.second;
+		pq.pop();
 
-		// check for success!
-		if (pCurrent->getRow() == targetRow && pCurrent->getCol() == targetCol)
+		// Stale entry: we already closed this cell with a better f
+		if (closed[row][col])
+			continue;
+		closed[row][col] = true;
+
+		if (row == targetRow && col == targetCol)
 		{
-			// Reconstruct path
-			Node* p = pCurrent;
-			while (p != nullptr)
+			vector<pair<int, int>> path;
+			int r = row, c = col;
+			while (r >= 0 && c >= 0)
 			{
-				path.push_back(p);
-				Node* parent = p->getParent();
-				if (parent != nullptr)
-				{
-					vector<Node>::iterator it = find(blacks.begin(), blacks.end(), *parent);
-					if (it != blacks.end())
-						p = &(*it);
-					else
-					{
-						it = find(grays.begin(), grays.end(), *parent);
-						if (it != grays.end())
-							p = &(*it);
-						else
-							p = nullptr;
-					}
-				}
-				else
-					p = nullptr;
+				path.push_back({ r, c });
+				int pr = parent[r][c].first, pc = parent[r][c].second;
+				r = pr; c = pc;
 			}
 			reverse(path.begin(), path.end());
 			return path;
 		}
 
-		// extract it from pq
-		pq.pop();
-
-		// and paint it black
-		blacks.push_back(*pCurrent);
-		vector<Node>::iterator itGray = find(grays.begin(), grays.end(), *pCurrent);
-		if (itGray == grays.end())
+		for (int d = 0; d < 4; d++)
 		{
-			return path; // No path found
-		}
-		grays.erase(itGray);
-
-		// Store pointer to current node in blacks
-		Node* pCurrentInBlacks = &blacks.back();
-
-		// check the neighbors of pCurrent
-		int row = pCurrent->getRow();
-		int col = pCurrent->getCol();
-
-		// try UP
-		if (row > 0)
-		{
-			pNeighbor = new Node(row - 1, col, pCurrentInBlacks, pCurrent->getG() + 1);
-			CheckNeighbor(pNeighbor, grays, blacks, pq, targetRow, targetCol);
-		}
-		// try DOWN
-		if (row < MSZ - 1)
-		{
-			pNeighbor = new Node(row + 1, col, pCurrentInBlacks, pCurrent->getG() + 1);
-			CheckNeighbor(pNeighbor, grays, blacks, pq, targetRow, targetCol);
-		}
-		// try LEFT
-		if (col > 0)
-		{
-			pNeighbor = new Node(row, col - 1, pCurrentInBlacks, pCurrent->getG() + 1);
-			CheckNeighbor(pNeighbor, grays, blacks, pq, targetRow, targetCol);
-		}
-		// try RIGHT
-		if (col < MSZ - 1)
-		{
-			pNeighbor = new Node(row, col + 1, pCurrentInBlacks, pCurrent->getG() + 1);
-			CheckNeighbor(pNeighbor, grays, blacks, pq, targetRow, targetCol);
+			int nr = row + dr[d];
+			int nc = col + dc[d];
+			if (nr < 0 || nr >= MSZ || nc < 0 || nc >= MSZ || maze[nr][nc] == WALL)
+				continue;
+			if (closed[nr][nc])
+				continue;
+			double ng = g[row][col] + 1;
+			if (ng < g[nr][nc])
+			{
+				g[nr][nc] = ng;
+				parent[nr][nc] = { row, col };
+				double nf = ng + h(nr, nc);
+				pq.push({ nf, { nr, nc } });
+			}
 		}
 	}
-	return path; // No path found
+	return vector<pair<int, int>>(); // no path
 }
 
 // Limited-depth BFS to find nearest ghost
@@ -353,10 +325,12 @@ int FindNearestCoin(int row, int col)
 	return -1; // No coin found
 }
 
-int GetDirectionAwayFromGhost(int pacmanRow, int pacmanCol, int ghostRow, int ghostCol)
+int GetDirectionAwayFromGhost(int pacmanRow, int pacmanCol, int ghostRow, int ghostCol, int prevRow, int prevCol)
 {
 	int bestDir = UP;
-	double maxDist = 0;
+	double maxDist = -1;
+	int fallbackDir = UP;
+	double fallbackDist = -1;
 
 	int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
 	int dirNames[4] = {UP, DOWN, LEFT, RIGHT};
@@ -370,14 +344,24 @@ int GetDirectionAwayFromGhost(int pacmanRow, int pacmanCol, int ghostRow, int gh
 			maze[newRow][newCol] != WALL)
 		{
 			double dist = abs(newRow - ghostRow) + abs(newCol - ghostCol);
-			if (dist > maxDist)
+			bool isPrevCell = (prevRow >= 0 && prevCol >= 0 && newRow == prevRow && newCol == prevCol);
+			if (isPrevCell)
+			{
+				if (dist > fallbackDist)
+				{
+					fallbackDist = dist;
+					fallbackDir = dirNames[d];
+				}
+			}
+			else if (dist > maxDist)
 			{
 				maxDist = dist;
 				bestDir = dirNames[d];
 			}
 		}
 	}
-	return bestDir;
+	// Prefer direction that is not the previous cell; only go back if no other option
+	return (maxDist >= 0) ? bestDir : fallbackDir;
 }
 
 int GetDirectionTowardCoin(int pacmanRow, int pacmanCol, int coinRow, int coinCol)
@@ -417,9 +401,9 @@ void MovePacman()
 
 	if (nearestGhostIdx >= 0)
 	{
-		// Ghost found - move away from nearest ghost
+		// Ghost found - move away from nearest ghost (avoid going back to previous cell)
 		int dir = GetDirectionAwayFromGhost(pacmanRow, pacmanCol, 
-			ghostRows[nearestGhostIdx], ghostCols[nearestGhostIdx]);
+			ghostRows[nearestGhostIdx], ghostCols[nearestGhostIdx], prevPacmanRow, prevPacmanCol);
 		switch (dir)
 		{
 		case UP: newRow--; break;
@@ -458,6 +442,8 @@ void MovePacman()
 		}
 
 		maze[pacmanRow][pacmanCol] = SPACE;
+		prevPacmanRow = pacmanRow;
+		prevPacmanCol = pacmanCol;
 		pacmanRow = newRow;
 		pacmanCol = newCol;
 		maze[pacmanRow][pacmanCol] = PACMAN;
@@ -469,18 +455,19 @@ void MoveGhosts()
 	for (int g = 0; g < 3; g++)
 	{
 		// Use A* to find path to Pacman
-		vector<Node*> path = AStar(ghostRows[g], ghostCols[g], pacmanRow, pacmanCol);
+		vector<pair<int, int>> path = AStar(ghostRows[g], ghostCols[g], pacmanRow, pacmanCol);
 
 		if (path.size() > 1)
 		{
 			// Move to next step in path
-			Node* next = path[1];
-			int newRow = next->getRow();
-			int newCol = next->getCol();
+			int newRow = path[1].first;
+			int newCol = path[1].second;
 
 			if (newRow >= 0 && newRow < MSZ && newCol >= 0 && newCol < MSZ &&
 				maze[newRow][newCol] != WALL)
 			{
+				if (maze[newRow][newCol] == COIN)
+					totalCoins--; // ghost stepped on coin, so one fewer coin to collect
 				maze[ghostRows[g]][ghostCols[g]] = SPACE;
 				ghostRows[g] = newRow;
 				ghostCols[g] = newCol;
@@ -613,8 +600,13 @@ void idle()
 
 		if (gameRunning)
 		{
-			MovePacman();
-			MoveGhosts();
+			int now = glutGet(GLUT_ELAPSED_TIME);
+			if (now - lastMoveTime >= MOVE_INTERVAL_MS)
+			{
+				lastMoveTime = now;
+				MovePacman();
+				MoveGhosts();
+			}
 		}
 	}
 

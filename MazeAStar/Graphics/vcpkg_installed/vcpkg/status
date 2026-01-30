@@ -1,0 +1,59 @@
+Package: vcpkg-cmake-config
+Version: 2024-05-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 6ef755c85ebd0bf14e8cd822c8460e8444a946ae5263db36284bcafd4b70b3d0
+Status: install ok installed
+
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 6c58dbb07a68c6a4661f0a761112a2e40d6a87913ccced97fe4175d218bb8e3f
+Status: install ok installed
+
+Package: egl-registry
+Version: 2025-05-27
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 546bad98e2dcf85deee75fddab86a60a496e17fd680d6d7655fb81bfe8fd11e9
+Description: EGL API and Extension Registry
+Status: install ok installed
+
+Package: opengl-registry
+Version: 2025-10-23
+Depends: egl-registry
+Architecture: x64-windows
+Multi-Arch: same
+Abi: d931ac78f5890c41bb46dfb7f5c84ef1038424d741377b9264716073f973903f
+Description: OpenGL, OpenGL ES, and OpenGL ES-SC API and Extension Registry
+Status: install ok installed
+
+Package: opengl
+Version: 2022-12-04
+Port-Version: 3
+Depends: opengl-registry
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b357145f65743fe39dd6246f41f8e788d620b22a023360f550b81932fcd6262c
+Description: Open Graphics Library (OpenGL)[3][4][5] is a cross-language, cross-platform application programming interface (API) for rendering 2D and 3D vector graphics.
+Status: install ok installed
+
+Package: freeglut
+Version: 3.8.0
+Depends: opengl, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: deaaa616772adf0df3adc63db9f609da0160a64a13efc2562ec8054fa5a8368c
+Description: A free OpenGL utility toolkit, the open-sourced alternative to the GLUT library.
+Status: install ok installed
+
+Package: glew
+Version: 2.3.1
+Depends: opengl, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 48ef7ab179fe548fc64aefc26847eae0fd23e4abb88b8de76d0bfa63f8c2f144
+Description: The OpenGL Extension Wrangler Library (GLEW) is a cross-platform open-source C/C++ extension loading library.
+Status: install ok installed
+

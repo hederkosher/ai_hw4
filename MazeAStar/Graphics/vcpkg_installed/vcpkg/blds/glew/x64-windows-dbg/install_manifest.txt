@@ -1,0 +1,12 @@
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/glew32d.lib
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/bin/glew32d.dll
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/pkgconfig/glew.pc
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/glew32d.pdb
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/include/GL/wglew.h
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/include/GL/glew.h
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/include/GL/glxew.h
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/include/GL/eglew.h
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/cmake/glew/glew-targets.cmake
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/cmake/glew/glew-targets-debug.cmake
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/cmake/glew/glew-config.cmake
+D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/debug/lib/cmake/glew/CopyImportedTargetProperties.cmake

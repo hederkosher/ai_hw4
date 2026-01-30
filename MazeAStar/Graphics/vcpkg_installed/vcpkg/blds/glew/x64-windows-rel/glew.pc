@@ -1,0 +1,11 @@
+prefix=D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows
+exec_prefix=${prefix}
+libdir=D:/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/pkgs/glew_x64-windows/lib
+includedir=${prefix}/include
+
+Name: glew
+Description: The OpenGL Extension Wrangler library
+Version: 2.3.1
+Cflags: -I${includedir} 
+Libs: -L${libdir} -lglew32 
+Requires: glu

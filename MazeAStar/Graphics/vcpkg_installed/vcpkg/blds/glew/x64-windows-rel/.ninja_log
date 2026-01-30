@@ -1,0 +1,6 @@
+# ninja log v6
+7	61	7914816996509401	CMakeFiles/glew.dir/D_/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/blds/glew/src/glew-8cf78e348c.clean/build/glew.rc.res	fbc3194c46d34dc6
+5	11451	7914816996484366	CMakeFiles/glew.dir/D_/Programming/ai_hw4/MazeAStar/Graphics/vcpkg_installed/vcpkg/blds/glew/src/glew-8cf78e348c.clean/src/glew.c.obj	dbaed3bcb0d90cbe
+11452	11576	7914817112001162	bin/glew32.dll	716d5f7fca9a6535
+11452	11576	7914817112001162	lib/glew32.lib	716d5f7fca9a6535
+11576	11660	7914817112195195	CMakeFiles/install.util	5c09a478d6ad1c6f
